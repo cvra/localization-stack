@@ -86,36 +86,32 @@ def keep_border_points(cloud_pts):
     return cloud_pts[to_keep, :]
 
 
-def fit_line(cloud_pts, sub_sel):
-    ''' Fit a line using RANSAC algorithm on a subset of points and return the
+def fit_line(cloud_pts):
+    ''' Fit a line using RANSAC algorithm on a set of points and return the
         inlier on the whole set of points.
 
     Parameters
     ----------
     cloud_pts: (N,2) numpy array of float
-    sub_sel: (N) numpy array of boolean
 
     Returns
     -------
     segment: Segment object containing the line model of the fitted line
     inliers: (N) numpy array of boolean '''
 
-    sub_cloud_pts = cloud_pts[sub_sel,:]
-
-    inliers = np.zeros(cloud_pts.shape[0], dtype=bool)
-    if sub_cloud_pts.shape[0] < 2:
-        return None, inliers
+    if cloud_pts.shape[0] < 2:
+        return None
 
     # robustly fit line only using inlier data with RANSAC algorithm
-    model_robust, _ = ransac(sub_cloud_pts, LineModel, min_samples=2,
+    model_robust, inliers = ransac(cloud_pts, LineModel, min_samples=2,
                              residual_threshold=RANSAC_RESIDUAL_THRESHOLD,
                              max_trials=RANSAC_MAX_TRIAL)
 
-    # find inliers on the whole set
-    inliers = (abs(model_robust.residuals(cloud_pts))<RANSAC_RESIDUAL_THRESHOLD)
-    segment = Segment(model_robust, cloud_pts[inliers,:])
 
-    return segment, inliers
+    inliers_pts = cloud_pts[inliers,:]
+    segment = Segment(model_robust, inliers_pts)
+
+    return segment
 
 def find_lines(cloud_pts, nb_lines):
     ''' Find N lines in a cloud of points and return list of model of these line
@@ -130,19 +126,23 @@ def find_lines(cloud_pts, nb_lines):
     lines_model: list of (M) Segment object containing the line model and the  
     list of points onto each lines . With M = number of found line. '''
 
-    inliers = np.zeros((cloud_pts.shape[0], nb_lines), dtype=bool)
     lines_model = []
 
-    for i in range(nb_lines):
-        # select the points that are not yet onto a fitted line
-        sel = np.asarray([any(row) == False for row in inliers[:,range(i)]])
+    sub_cloud_pts = cloud_pts
 
-        if len(cloud_pts[sel,:]) > 0:
-            model, inliers[:,i] = fit_line(cloud_pts, sel)
+    for i in range(nb_lines):
+
+        if len(sub_cloud_pts) > 0:
+            model = fit_line(sub_cloud_pts)
+
             if model is not None:
                 lines_model.append(model)
 
+                set_sub = set(tuple(x) for x in sub_cloud_pts)
+                set_model = set(tuple(x) for x in model.points)
+                sub_cloud_pts = np.array([x for x in set_sub - set_model])
     return lines_model
+
 
 def segment_line(lines_model):
     ''' Project all inliers points of each line to find the extremas of these 
