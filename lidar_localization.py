@@ -79,11 +79,12 @@ while 1:
     theta = np.linspace(TIM561_START_ANGLE, TIM561_STOP_ANGLE, len(radius))
 
     cloud_pts = pol2cart(radius, theta)
-    cloud_pts = density_reduction(cloud_pts, MAX_DIST_POINT, 1)
+    red_cloud_pts = density_reduction(cloud_pts, MAX_DIST_POINT, 1)
+    red_cloud_pts = keep_border_points(red_cloud_pts)
 
 
     # find lines
-    lines_model = find_lines(cloud_pts, NB_LINE)
+    lines_model = find_lines(red_cloud_pts, NB_LINE)
 
     # convert into segment
     segments = segment_line(lines_model)

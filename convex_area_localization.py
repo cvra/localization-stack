@@ -80,13 +80,10 @@ def keep_border_points(cloud_pts):
         model = LineModel()
         model.estimate(data)
 
-        for idx, point in enumerate(cloud_pts):
-            if to_keep[idx] == False:
-                res, _ = model.residuals(np.asarray([point, point]))
-                if abs(res) < SEGMENT_RESIDUAL_THRESHOLD:
-                    to_keep[idx] = True
+        to_keep = np.logical_or(to_keep, abs(model.residuals(cloud_pts)) 
+                                           < SEGMENT_RESIDUAL_THRESHOLD)
 
-    return cloud_pts[to_keep]
+    return cloud_pts[to_keep, :]
 
 
 def fit_line(cloud_pts, sub_sel):
