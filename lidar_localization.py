@@ -8,12 +8,13 @@ import convex_area_localization
 from convex_area_localization import *
 
 PLOT = False # activate plot - this reduce drastically the computation rate
+PRINT = False # print position
 
 TIM561_START_ANGLE = -0.7853981634  # in rad,  = -45°
 TIM561_STOP_ANGLE  =  3.926990817   # in rad,  = 225°
 
-MAX_DIST_POINT = 0.02  # in cm
-NB_LINE = 6            # number of line to search in points cloud
+MAX_DIST_POINT = 0.005  # in cm
+NB_LINE = 4            # number of line to search in points cloud
 
 def PlotPolar():
     # Add polar grid lines
@@ -98,8 +99,9 @@ while 1:
     # localize the robot using the intersection found
     pos, orientation = localize(corners, position)
     if pos is not None or orientation is not None:
-        print(chr(27) + "[2J")
-        print(str(np.mean(pos, axis=0))+" "+str(np.mean(orientation)))
+        if PRINT:
+            print(chr(27) + "[2J")
+            print(str(np.mean(pos, axis=0))+" "+str(np.mean(orientation)))
 
         node.publish('/lidar/position', np.mean(pos, axis=0).tolist())
         node.publish('/lidar/orientation', np.mean(orientation))

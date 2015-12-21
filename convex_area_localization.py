@@ -6,10 +6,10 @@ from skimage.transform import AffineTransform
 import scipy.ndimage.interpolation
 from hull import convex_hull
 
-RANSAC_RESIDUAL_THRESHOLD = 0.03  # in m
-RANSAC_MAX_TRIAL = 100
-SEGMENT_RESIDUAL_THRESHOLD = 0.09 # in m
-INTERSECTION_THRESHOLD = 0.05     # in rad
+RANSAC_RESIDUAL_THRESHOLD = 0.01  # in m
+RANSAC_MAX_TRIAL = 80
+SEGMENT_RESIDUAL_THRESHOLD = 0.03 # in m
+INTERSECTION_THRESHOLD = 0.01     # in rad
 
 class Segment:
     def __init__(self, model, points):
