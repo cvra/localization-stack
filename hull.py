@@ -3,6 +3,14 @@ import functools
 
 TURN_LEFT, TURN_RIGHT, TURN_NONE = (1, -1, 0)
 
+def cmp(a,b):
+    if a<b:
+        return -1
+    elif a==b:
+        return 0
+    else:
+        return 1
+        
 def turn(p, q, r):
     return cmp((q[0] - p[0])*(r[1] - p[1]) - (r[0] - p[0])*(q[1] - p[1]), 0)
 
@@ -18,4 +26,4 @@ def convex_hull(points):
     points = sorted(points)
     l = functools.reduce(_keep_left, points, [])
     u = functools.reduce(_keep_left, reversed(points), [])
-    return l.extend(u[i] for i in xrange(1, len(u) - 1)) or l
+    return l.extend(u[i] for i in range(1, len(u) - 1)) or l
