@@ -7,9 +7,11 @@ import scipy.ndimage.interpolation
 from hull import convex_hull
 
 RANSAC_RESIDUAL_THRESHOLD = 0.01  # in m
-RANSAC_MAX_TRIAL = 80
+RANSAC_MAX_TRIAL = 30
 SEGMENT_RESIDUAL_THRESHOLD = 0.03 # in m
-INTERSECTION_THRESHOLD = 0.01     # in rad
+SEGMENT_TOTAL_RESIDUAL_THRESHOLD = 0.05 # in m
+INTERSECTION_THRESHOLD = 0.02     # in rad
+CONVEX_HULL_THRESHOLD = 0.1
 
 class Segment:
     def __init__(self, model, points):
@@ -17,6 +19,15 @@ class Segment:
         self.pt_B = None
         self.model = model
         self.points = points
+
+    def length(self):
+        length = 0
+        pts_A = np.asarray(self.pt_A)
+        pts_B = np.asarray(self.pt_B)
+        if self.pt_A is not None and self.pt_A is not None: 
+            length = np.linalg.norm(pts_A - pts_B)
+
+        return length
 
 class OrientedCorner:
     def __init__(self, x, y, angle):
@@ -81,10 +92,9 @@ def keep_border_points(cloud_pts):
         model.estimate(data)
 
         to_keep = np.logical_or(to_keep, abs(model.residuals(cloud_pts)) 
-                                           < SEGMENT_RESIDUAL_THRESHOLD)
+                                           < CONVEX_HULL_THRESHOLD)
 
     return cloud_pts[to_keep, :]
-
 
 def fit_line(cloud_pts):
     ''' Fit a line using RANSAC algorithm on a set of points and return the
@@ -113,6 +123,7 @@ def fit_line(cloud_pts):
 
     return segment
 
+
 def find_lines(cloud_pts, nb_lines):
     ''' Find N lines in a cloud of points and return list of model of these line
 
@@ -127,22 +138,22 @@ def find_lines(cloud_pts, nb_lines):
     list of points onto each lines . With M = number of found line. '''
 
     lines_model = []
-
     sub_cloud_pts = cloud_pts
-
     for i in range(nb_lines):
-
         if len(sub_cloud_pts) > 0:
             model = fit_line(sub_cloud_pts)
 
             if model is not None:
+                # if len(model.points) > MIN_NB_POINTS_PER_SEGMENT:
+                #     lines_model.append(model)
                 lines_model.append(model)
 
                 set_sub = set(tuple(x) for x in sub_cloud_pts)
                 set_model = set(tuple(x) for x in model.points)
-                sub_cloud_pts = np.array([x for x in set_sub - set_model])
-    return lines_model
 
+                sub_cloud_pts = np.array([x for x in set_sub - set_model])
+
+    return lines_model
 
 def segment_line(lines_model):
     ''' Project all inliers points of each line to find the extremas of these 
@@ -175,7 +186,6 @@ def segment_line(lines_model):
 
     return lines_model
 
-
 def keep_external_segment(segments):
     ''' Return segment that are on the convex hull. i.e. all the segment for 
         which all the other segment lies on the same side.
@@ -197,7 +207,6 @@ def keep_external_segment(segments):
 
     for segment in segments:
         residuals = segment.model.residuals(pts)
-        
         ind_none_zero = [idx for idx,value in enumerate(residuals)   
                              if abs(value) > SEGMENT_RESIDUAL_THRESHOLD]
 
@@ -206,7 +215,23 @@ def keep_external_segment(segments):
         if(len(np.unique(residuals_sgn)) == 1):
             kept_segments.append(segment)
 
-    return kept_segments
+    kept_idx = np.ones(len(kept_segments), dtype=bool)
+
+    for idx1,segment1 in enumerate(kept_segments[:-1]):
+        for idx_rel,segment2 in enumerate(kept_segments[idx1+1:]):
+            if kept_idx[idx1] == True:
+                idx2 = idx1 + idx_rel + 1
+
+                residuals = segment1.model.residuals(np.asarray([segment2.pt_A, segment2.pt_B]))
+
+                if max(abs(residuals)) < SEGMENT_TOTAL_RESIDUAL_THRESHOLD:
+                    if(segment1.length() > segment2.length()):
+                        kept_idx[idx2] = False
+                    else:
+                        kept_idx[idx1] = False
+
+    ext_segment = [s for idx, s in enumerate(kept_segments) if kept_idx[idx] == True]
+    return ext_segment
 
 def segment_intersection(segment1, segment2):
     ''' Return the intersection point of the segment
@@ -268,22 +293,16 @@ def extract_corner(ext_segments):
                     pt2 = segment2.pt_B
 
                 v1 = pt1 - pos
-                v1 = v1 / np.linalg.norm(v1)
-
                 v2 = pt2 - pos
+                v1 = v1 / np.linalg.norm(v1)
                 v2 = v2 / np.linalg.norm(v2)
 
-                corner_dir = (v1+v2) / np.linalg.norm(v1+v2)
+                corner_dir = (v1+v2)
 
-                angle_ref = math.cos(math.pi/4)
-
-                corner_angle = (math.atan2(-angle_ref,angle_ref) - 
-                                math.atan2(corner_dir[1], corner_dir[0])) 
-
+                corner_angle = math.atan2(corner_dir[1], corner_dir[0]) - math.atan2(1,1)
                 corner_angle = corner_angle % (2*math.pi)
 
                 corner = OrientedCorner(x, y, corner_angle)
-
                 corners.append(corner)
 
     if len(corners) == 0:
@@ -325,28 +344,29 @@ def localize(corners, est_position):
     pos = None
     orientation = None
 
-    table_pos = np.array([[0,0],[0,3],[2,3],[2,0]], dtype=float)
-    table_angle = np.array([3*math.pi/2,0,math.pi/2,math.pi],dtype=float)
+    table_pos = np.array([[0,0],[2,0],[2,3],[0,3]], dtype=float)
+    table_angle = np.array([0,math.pi/2,math.pi,3*math.pi/2],dtype=float)
 
-    table_corner = table_pos - [est_position[0], est_position[1]]
+    table_corner = table_pos - est_position[0:2]
     table_corner = rotatePolygon(table_corner, -est_position[2])
 
     if corners is not None:
+        corner_pos = np.asarray([[corner.x,corner.y] for corner in corners])
+        corner_pos = rotatePolygon(corner_pos, -math.pi/2)
 
-        corner_pos = [np.asarray([elem.x,elem.y]) for elem in corners]
         combi = np.asarray([x for x in product(table_corner,corner_pos)])
 
         norm = [np.linalg.norm(P1-P2) for P1, P2 in combi[:]]
         norm = np.reshape(norm, (table_corner.shape[0], len(corners)))
+
         match = np.argmin(norm, axis=0)
 
-        orientation =  [corner.angle for corner in corners] - table_angle[match]
+        orientation = table_angle[match] - [corner.angle-math.pi/2 for corner in corners]
         orientation = (orientation + math.pi) % (2*math.pi) - math.pi
 
         pos = [table_pos[match[idx]] - 
-               rotatePolygon(np.array([corner.x, corner.y]), orientation[idx]).T
-               for idx,corner in enumerate(corners)]
-
+                rotatePolygon(np.array([corner.x, corner.y]), orientation[idx]-math.pi/2).T
+                for idx,corner in enumerate(corners)]
     return pos, orientation
 
 
