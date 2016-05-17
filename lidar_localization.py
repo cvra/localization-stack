@@ -106,9 +106,6 @@ def main():
 
         # reduce cloud point density
         red_cloud_pts = density_reduction(cloud_pts, config['MAX_DIST_POINT'], 1)
-        
-        # keep only border points
-        red_cloud_pts = keep_border_points(red_cloud_pts)
 
         # find lines
         lines_model = find_lines(red_cloud_pts, config['NB_LINE'])
