@@ -93,10 +93,10 @@ def main():
 
     datagram = node.recv('/lidar/scan')
     node.register_message_handler('/lidar/scan', update_scan_data)
-    datagram_pos = node.recv('/odometry/position')
-    node.register_message_handler('/odometry/position', update_scan_pos)
+    datagram_pos = node.recv('/position')
+    node.register_message_handler('/position', update_scan_pos)
 
-    datagram_pos = np.asarray([0,1,0])
+    datagram_pos = np.asarray([0.5,0.5,1.57])
 
     print('receiving')
     while 1:
