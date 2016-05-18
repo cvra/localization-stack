@@ -1,9 +1,6 @@
-
 import argparse
 import json
 from jsmin import jsmin
-import math 
-import time
 import itertools
 import numpy as np
 import os

@@ -2,7 +2,6 @@ import math
 import numpy as np
 from itertools import product
 from skimage.measure import LineModel, ransac
-from skimage.transform import AffineTransform
 from hull import convex_hull
 
 RANSAC_RESIDUAL_THRESHOLD = 0.01  # in m
