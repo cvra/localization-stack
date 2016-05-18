@@ -1,0 +1,8 @@
+{
+    "TIM561_START_ANGLE":-0.7853981634, // -45° in rad
+    "TIM561_STOP_ANGLE":3.926990817,    // 225° in rad
+    "MAX_DIST_POINT":0.005,             // Maximum distance between in cm
+    "NB_LINE":5,                        // number of line to search in points cloud
+    "TABLE_WIDTH":2,
+    "TABLE_HEIGHT":3
+}
