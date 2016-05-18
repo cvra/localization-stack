@@ -94,8 +94,7 @@ def main():
                 os.system('clear')
                 print(str(position)+" "+str(orientation))
 
-            node.publish('/lidar/position', position.tolist())
-            node.publish('/lidar/orientation', orientation)
+            node.publish('/lidar/position', position.tolist() + [orientation])
 
 if __name__ == '__main__':
     main()
