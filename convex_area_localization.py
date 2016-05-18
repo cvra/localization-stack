@@ -329,7 +329,7 @@ def rotatePolygon(polygon,theta):
 
     return rotated_polygon
 
-def localize(corners, est_position):
+def localize(corners, est_position, table_width, table_height):
     ''' Localize the robot by matching found corners with the one of the 
         rectangular table at there expected position. This need an estimation of
         the position to match correctly the corner.
@@ -344,7 +344,7 @@ def localize(corners, est_position):
     pos = None
     orientation = None
 
-    table_pos = np.array([[0,0],[2,0],[2,3],[0,3]], dtype=float)
+    table_pos = np.array([[0,0],[table_width,0],[table_width,table_height],[0,table_height]], dtype=float)
     table_angle = np.array([0,math.pi/2,math.pi,3*math.pi/2],dtype=float)
 
     table_corner = table_pos - est_position[0:2]
@@ -364,9 +364,11 @@ def localize(corners, est_position):
         orientation = table_angle[match] - [corner.angle-math.pi/2 for corner in corners]
         orientation = (orientation + math.pi) % (2*math.pi) - math.pi
 
-        pos = [table_pos[match[idx]] - 
-                rotatePolygon(np.array([corner.x, corner.y]), orientation[idx]-math.pi/2).T
-                for idx,corner in enumerate(corners)]
+        pos = list()
+        for idx,corner in enumerate(corners):
+            rotated_corner = rotatePolygon(np.array([corner.x, corner.y]), orientation[idx]-math.pi/2).T
+            pos.append(table_pos[match[idx]] - rotated_corner)
+
     return pos, orientation
 
 

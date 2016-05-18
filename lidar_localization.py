@@ -120,12 +120,15 @@ def main():
         corners = extract_corner(ext_segments)
 
         # localize the robot using the intersections found
-        positions, orientations = localize(corners, datagram_pos)
+        positions, orientations = localize(corners, datagram_pos, config['TABLE_WIDTH'], config['TABLE_HEIGHT'])
 
-        position = np.mean(positions, axis=0).squeeze()
-        orientation = np.mean(orientations)
+        position = np.array([0,0])
+        orientation = np.array([0])
 
-        if position is not None and orientation is not None:
+        if positions is not None and orientations is not None:
+            position = np.mean(positions, axis=0).squeeze()
+            orientation = np.mean(orientations)
+
             if args.print_output:
                 os.system('clear')
                 print(str(position)+" "+str(orientation))
@@ -179,7 +182,8 @@ def main():
                     symbolPen=symbolePen)
 
             # # draw table estimation corner
-            table_corner = np.array([[0,0],[0,3],[2,3],[2,0]], dtype=float)
+            table_corner = np.array([[0,0],[0,config['TABLE_HEIGHT']],[config['TABLE_WIDTH'],
+                                            config['TABLE_HEIGHT']],[config['TABLE_WIDTH'],0]], dtype=float)
             table_corner = table_corner - [position[0], position[1]]
             table_corner = rotatePolygon(table_corner, -orientation+math.pi/2)
 
