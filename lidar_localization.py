@@ -1,12 +1,10 @@
 import argparse
 import json
 from jsmin import jsmin
-import itertools
 import numpy as np
 import os
 
 import zmqmsgbus
-import convex_area_localization
 from convex_area_localization import *
 
 def parse_args():
@@ -19,6 +17,19 @@ def parse_args():
     return parser.parse_args()
 
 
+def pol2cart(radius, theta):
+    ''' Convert polar coordinate onto cartesian coordinate
+
+    Parameters are (N) numpy array of float
+    Return cartesian (N,2) numpy array of float '''
+
+    x = radius * np.cos(theta)
+    y = radius * np.sin(theta)
+
+    cartesian = np.array([x, y]).T;
+    return cartesian;
+
+
 def update_scan_data(topic, message):
     global datagram
     datagram = message
@@ -28,7 +39,7 @@ def update_scan_pos(topic, message):
     global datagram_pos
     datagram_pos = message
 
-    
+
 def main():
     global datagram
     global datagram_pos
