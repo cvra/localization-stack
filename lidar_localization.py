@@ -14,6 +14,8 @@ def parse_args():
 
     parser.add_argument('--print', dest='print_output', help='Print estimated postion and orientation in the shell.', action="store_true")
 
+    parser.add_argument('--logs', help='Logs and publish intermediate computations.', action="store_true")
+
     return parser.parse_args()
 
 
@@ -96,5 +98,19 @@ def main():
 
             node.publish('/lidar/position', position.tolist() + [orientation])
 
+        # Publish data for viewer 
+        if args.logs:
+            node.publish('/lidar_viewer/cloud_pts', cloud_pts.tolist())
+            node.publish('/lidar_viewer/red_cloud_pts', red_cloud_pts.tolist())
+            
+            segments = list()
+            for idx, segment in enumerate(ext_segments):
+                segments.append(((segment.pt_A[0], segment.pt_B[0]), (segment.pt_A[1],segment.pt_B[1])))
+            node.publish('/lidar_viewer/segments', segments)
+
+            if corners is not None:
+                node.publish('/lidar_viewer/corners', [(corner.x, corner.y) for corner in corners])
+            else:
+                node.publish('/lidar_viewer/corners', [])
 if __name__ == '__main__':
     main()
