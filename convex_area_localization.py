@@ -4,13 +4,6 @@ from itertools import product
 from skimage.measure import LineModel, ransac
 from hull import convex_hull
 
-RANSAC_RESIDUAL_THRESHOLD = 0.01  # in m
-RANSAC_MAX_TRIAL = 30
-SEGMENT_RESIDUAL_THRESHOLD = 0.03 # in m
-SEGMENT_TOTAL_RESIDUAL_THRESHOLD = 0.05 # in m
-INTERSECTION_THRESHOLD = 0.02     # in rad
-CONVEX_HULL_THRESHOLD = 0.1
-
 class Segment:
     def __init__(self, model, points):
         self.pt_A = None
@@ -70,7 +63,7 @@ def density_reduction(cloud_pts, min_dist_treshold, k):
 
     return filtered_points;
 
-def keep_border_points(cloud_pts):
+def keep_border_points(cloud_pts, convex_hull_threshold):
     ''' Return the points that are localized onto the convex hull of the cloud
         of input points.
 
@@ -90,17 +83,20 @@ def keep_border_points(cloud_pts):
         model.estimate(data)
 
         to_keep = np.logical_or(to_keep, abs(model.residuals(cloud_pts)) 
-                                           < CONVEX_HULL_THRESHOLD)
+                                           < convex_hull_threshold)
 
     return cloud_pts[to_keep, :]
 
-def fit_line(cloud_pts):
+def fit_line(cloud_pts, ransac_residual_threshold, ransac_max_trial):
     ''' Fit a line using RANSAC algorithm on a set of points and return the
         inlier on the whole set of points.
 
     Parameters
     ----------
     cloud_pts: (N,2) numpy array of float
+    ransac_residual_threshold: maximum residual threshold for RANSAC
+    ransac_max_trial: maximum number of trials that RANSAC must perform before
+                      stopping to search.
 
     Returns
     -------
@@ -112,8 +108,8 @@ def fit_line(cloud_pts):
 
     # robustly fit line only using inlier data with RANSAC algorithm
     model_robust, inliers = ransac(cloud_pts, LineModel, min_samples=2,
-                             residual_threshold=RANSAC_RESIDUAL_THRESHOLD,
-                             max_trials=RANSAC_MAX_TRIAL)
+                             residual_threshold=ransac_residual_threshold,
+                             max_trials=ransac_max_trial)
 
 
     inliers_pts = cloud_pts[inliers,:]
@@ -122,13 +118,16 @@ def fit_line(cloud_pts):
     return segment
 
 
-def find_lines(cloud_pts, nb_lines):
+def find_lines(cloud_pts, nb_lines, ransac_residual_threshold, ransac_max_trial):
     ''' Find N lines in a cloud of points and return list of model of these line
 
     Parameters
     ----------
     cloud_pts: (N,2) numpy array of float
     nb_lines: integer
+    ransac_residual_threshold: maximum residual threshold for RANSAC
+    ransac_max_trial: maximum number of trials that RANSAC must perform before
+                      stopping to search.
 
     Returns
     -------
@@ -139,7 +138,9 @@ def find_lines(cloud_pts, nb_lines):
     sub_cloud_pts = cloud_pts
     for i in range(nb_lines):
         if len(sub_cloud_pts) > 0:
-            model = fit_line(sub_cloud_pts)
+            model = fit_line(cloud_pts=sub_cloud_pts, 
+                             ransac_residual_threshold=ransac_residual_threshold,
+                             ransac_max_trial=ransac_max_trial)
 
             if model is not None:
                 # if len(model.points) > MIN_NB_POINTS_PER_SEGMENT:
@@ -184,13 +185,15 @@ def segment_line(lines_model):
 
     return lines_model
 
-def keep_external_segment(segments):
+def keep_external_segment(segments, segment_residual_threshold, segment_total_residual_threshold):
     ''' Return segment that are on the convex hull. i.e. all the segment for 
         which all the other segment lies on the same side.
 
     Parameters
     ----------
     segments: list of (N) Segment object 
+    segment_residual_threshold: Maximum distance around convex hull 
+    segment_total_residual_threshold: 
 
     Returns
     -------
@@ -206,7 +209,7 @@ def keep_external_segment(segments):
     for segment in segments:
         residuals = segment.model.residuals(pts)
         ind_none_zero = [idx for idx,value in enumerate(residuals)   
-                             if abs(value) > SEGMENT_RESIDUAL_THRESHOLD]
+                             if abs(value) > segment_residual_threshold]
 
         residuals_sgn = np.sign(residuals[ind_none_zero])
 
@@ -222,7 +225,7 @@ def keep_external_segment(segments):
 
                 residuals = segment1.model.residuals(np.asarray([segment2.pt_A, segment2.pt_B]))
 
-                if max(abs(residuals)) < SEGMENT_TOTAL_RESIDUAL_THRESHOLD:
+                if max(abs(residuals)) < segment_total_residual_threshold:
                     if(segment1.length() > segment2.length()):
                         kept_idx[idx2] = False
                     else:
@@ -250,13 +253,14 @@ def segment_intersection(segment1, segment2):
 
     return x, y
 
-def extract_corner(ext_segments):
+def extract_corner(ext_segments, intersection_threshold):
     ''' Return the list corner (perpendicular intersection of two segment) 
         characterized by there position and an angular orientation.
 
     Parameters
     ----------
     ext_segments: list of (N) Segment object 
+    intersection_threshold:
 
     Returns
     -------
@@ -271,7 +275,7 @@ def extract_corner(ext_segments):
 
             diff = abs(theta1 - theta2);
 
-            if abs(diff - math.pi / 2) < INTERSECTION_THRESHOLD:
+            if abs(diff - math.pi / 2) < intersection_threshold:
                 x, y = segment_intersection(segment1, segment2)
 
                 pos = np.array([x,y])

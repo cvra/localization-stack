@@ -2,7 +2,13 @@
     "TIM561_START_ANGLE":3.926990817,   // 225° in rad
     "TIM561_STOP_ANGLE":-0.7853981634,  // -45° in rad
     "MAX_DIST_POINT":0.005,             // Maximum distance between in cm
-    "NB_LINE":5,                        // number of line to search in points cloud
+    "NB_LINE":6,                        // number of line to search in points cloud
     "TABLE_WIDTH":1,
-    "TABLE_HEIGHT":2
+    "TABLE_HEIGHT":2,
+    "RANSAC_RESIDUAL_THRESHOLD":0.01,        // in m
+    "RANSAC_MAX_TRIAL":300,
+    "SEGMENT_RESIDUAL_THRESHOLD":0.02,       // in m
+    "SEGMENT_TOTAL_RESIDUAL_THRESHOLD":0.04, // in m
+    "INTERSECTION_THRESHOLD":0.05,           // in rad
+    "CONVEX_HULL_THRESHOLD":0.1
 }

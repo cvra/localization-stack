@@ -71,19 +71,29 @@ def main():
         red_cloud_pts = density_reduction(cloud_pts, config['MAX_DIST_POINT'], 1)
 
         # find lines
-        lines_model = find_lines(red_cloud_pts, config['NB_LINE'])
+        lines_model = find_lines(cloud_pts=red_cloud_pts, 
+                                 nb_lines=config['NB_LINE'], 
+                                 ransac_residual_threshold=config['RANSAC_RESIDUAL_THRESHOLD'], 
+                                 ransac_max_trial=config['RANSAC_MAX_TRIAL'])
 
         # convert lines onto segments
         segments = segment_line(lines_model)
 
+        ext_segments = segments
         # only keep external segments
-        ext_segments = keep_external_segment(segments)
-        
+        # ext_segments = keep_external_segment(segments=segments, 
+        #                                      segment_residual_threshold=config['SEGMENT_RESIDUAL_THRESHOLD'],
+        #                                      segment_total_residual_threshold=config['SEGMENT_TOTAL_RESIDUAL_THRESHOLD'])
+
         # extract valide intersections
-        corners = extract_corner(ext_segments)
+        corners = extract_corner(ext_segments=ext_segments, 
+                                 intersection_threshold=config['INTERSECTION_THRESHOLD'])
 
         # localize the robot using the intersections found
-        positions, orientations = localize(corners, datagram_pos, config['TABLE_WIDTH'], config['TABLE_HEIGHT'])
+        positions, orientations = localize(corners=corners, 
+                                           est_position=datagram_pos, 
+                                           table_width=config['TABLE_WIDTH'], 
+                                           table_height=config['TABLE_HEIGHT'])
 
         position = np.array([0,0])
         orientation = np.array([0])
@@ -103,10 +113,10 @@ def main():
             node.publish('/lidar_viewer/cloud_pts', cloud_pts.tolist())
             node.publish('/lidar_viewer/red_cloud_pts', red_cloud_pts.tolist())
             
-            segments = list()
+            segments_publisher = list()
             for idx, segment in enumerate(ext_segments):
-                segments.append(((segment.pt_A[0], segment.pt_B[0]), (segment.pt_A[1],segment.pt_B[1])))
-            node.publish('/lidar_viewer/segments', segments)
+                segments_publisher.append(((segment.pt_A[0], segment.pt_B[0]), (segment.pt_A[1],segment.pt_B[1])))
+            node.publish('/lidar_viewer/segments', segments_publisher)
 
             if corners is not None:
                 node.publish('/lidar_viewer/corners', [(corner.x, corner.y) for corner in corners])
