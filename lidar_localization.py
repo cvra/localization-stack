@@ -25,16 +25,21 @@ def pol2cart(radius, theta):
     Parameters are (N) numpy array of float
     Return cartesian (N,2) numpy array of float '''
 
-    x = radius * np.cos(theta)
-    y = radius * np.sin(theta)
+    x = radius * np.cos(theta + np.pi / 2)
+    y = radius * np.sin(theta + np.pi / 2)
 
     cartesian = np.array([x, y]).T;
     return cartesian;
 
 
-def update_scan_data(topic, message):
-    global datagram
-    datagram = message
+def update_scan_radius(topic, message):
+    global radius
+    radius = np.array(message)
+
+
+def update_scan_theta(topic, message):
+    global theta
+    theta = np.array(message)
 
 
 def update_scan_pos(topic, message):
@@ -43,7 +48,7 @@ def update_scan_pos(topic, message):
 
 
 def main():
-    global datagram
+    global radius, theta
     global datagram_pos
 
     args = parse_args()
@@ -54,8 +59,11 @@ def main():
                         pub_addr='ipc://ipc/sink')
     node = zmqmsgbus.Node(bus)
 
-    datagram = node.recv('/lidar/scan')
-    node.register_message_handler('/lidar/scan', update_scan_data)
+    radius = np.array(node.recv('/lidar/radius'))
+    node.register_message_handler('/lidar/radius', update_scan_radius)
+    theta = np.array(node.recv('/lidar/theta'))
+    node.register_message_handler('/lidar/theta', update_scan_theta)
+
     datagram_pos = node.recv('/position')
     node.register_message_handler('/position', update_scan_pos)
 
@@ -63,8 +71,6 @@ def main():
 
     print('receiving')
     while 1:
-        radius = np.asarray(datagram['Data'])
-        theta = np.linspace(config['TIM561_START_ANGLE'], config['TIM561_STOP_ANGLE'], len(radius))
         cloud_pts = pol2cart(radius, theta)
 
         # reduce cloud point density
