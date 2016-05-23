@@ -7,5 +7,5 @@
     "RANSAC_MAX_TRIAL":300,
     "SEGMENT_RESIDUAL_THRESHOLD":0.02,       // in m
     "SEGMENT_TOTAL_RESIDUAL_THRESHOLD":0.04, // in m
-    "INTERSECTION_THRESHOLD":0.05,           // in rad
+    "INTERSECTION_THRESHOLD":0.05            // in rad
 }
