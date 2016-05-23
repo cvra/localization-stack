@@ -331,6 +331,7 @@ def rotatePolygon(polygon,theta):
 
     return rotated_polygon
 
+
 def localize(corners, est_position, table_width, table_height):
     ''' Localize the robot by matching found corners with the one of the 
         rectangular table at there expected position. This need an estimation of
@@ -375,5 +376,42 @@ def localize(corners, est_position, table_width, table_height):
 
 
 
+def localize_using_landmarks(corners, est_position, table_width, table_height):
+    ''' Localize the robot by finding the transformation model (rotation + translation)
+        that match the best the set of feature found to the known one on the table.
+        This need an estimation of
+        the position to match correctly the corner.
 
+    Parameters
+    ----------
+    corners: list of (N) OrientedCorner object 
+    est_position: list of 3 float. 1. position x; 2. position y; 3. orientation
+                  in radian
+    
+    '''
+    pos = None
+    orientation = None
 
+    if corners is  None:
+        return None, None
+
+    corners_list = np.array([(corner.x, corner.y) for corner in corners])
+
+    table_landmarks = np.array([[0,0],
+                                [table_width,0],
+                                [table_width,table_height],
+                                [0,table_height]], 
+                                dtype=float)
+
+    table_rel_landmarks = table_landmarks - est_position[0:2]
+    table_rel_landmarks = rotatePolygon(table_rel_landmarks, -est_position[2])
+
+    pair_idx = pair_points(table_rel_landmarks, corners_list)
+    src = table_rel_landmarks[pair_idx]
+    dst = corners_list
+
+    model_robust, inliers = ransac((src, dst), TransformationModel, min_samples=2,
+                               residual_threshold=0.02, max_trials=50)
+    outliers = inliers == False
+
+    return model_robust.translation+est_position[0:2], model_robust.rotation+est_position[0:2]
