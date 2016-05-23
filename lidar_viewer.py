@@ -108,9 +108,9 @@ def main():
         linePen = pg.mkPen(color=(200,200,200,200),width=2,
             style=QtCore.Qt.DotLine)
 
-        colors=[(255,0,0,255),(0,255,0,255),(0,0,255,255),(255,255,0,255),
-                (255,0,255,255),(0,127,255,255),(127,0,0,255),(0,127,0,255),
-                (0,0,127,255),(127,255,0,255),(127,0,255,255),(0,127,255,255)]
+        colors=[(255,0,0,180),(0,255,0,180),(0,0,255,180),(255,255,0,180),
+                (255,0,255,180),(0,127,255,180),(127,0,0,180),(0,127,0,180),
+                (0,0,127,180),(127,255,0,180),(127,0,255,180),(0,127,255,180)]
 
         # draw segment
         try:
@@ -122,14 +122,14 @@ def main():
         except:
             pass
 
-
         # draw corners found
-        symbolePen = pg.mkPen(color=(0,0,255,255), width= 2)
+        symbolePen = pg.mkPen(color=(255,255,0,255), width=4)
+        print(corners.shape)
+        if corners.shape[0] > 0:
+            plot.plot(corners[:,0], corners[:,1], pen=None, symbol='x',
+                symbolPen=symbolePen)
 
-        plot.plot(corners[:,0], corners[:,1], pen=None, symbol='x',
-            symbolPen=symbolePen)
-
-        # # draw table estimation corner
+        # draw table estimation corner
         table_corner = np.array([[0,0],[0,config['TABLE_HEIGHT']],[config['TABLE_WIDTH'],
                                         config['TABLE_HEIGHT']],[config['TABLE_WIDTH'],0]], dtype=float)
         table_corner = table_corner - [position[0], position[1]]
