@@ -3,6 +3,7 @@ import numpy as np
 from itertools import product
 from skimage.measure import LineModel, ransac
 from hull import convex_hull
+from models import TransformationModel, mean_angle, diff_angle, position_residuals
 
 class Segment:
     def __init__(self, model, points):
@@ -20,11 +21,30 @@ class Segment:
 
         return length
 
+
 class OrientedCorner:
     def __init__(self, x, y, angle):
         self.x = x
         self.y = y
         self.angle = angle
+        
+
+def get_robot_position_from_lidar(lidar):
+    lidar_heading = lidar[2]
+    robot_position = np.array(lidar[0:2]) - np.array([math.cos(lidar_heading), math.sin(lidar_heading)]) * 0.074
+    return [robot_position[0], robot_position[1], lidar_heading]
+
+
+def get_lidar_position_from_robot(robot):
+    robot_heading = robot[2]
+    lidar_position = np.array(robot[0:2]) + np.array([math.cos(robot_heading), math.sin(robot_heading)]) * 0.074
+    return [lidar_position[0], lidar_position[1], robot_heading]
+
+
+def remove_close_pts(radius, theta, min_distance):
+    to_keep = radius >= min_distance
+    return radius[to_keep], theta[to_keep]
+
 
 def density_reduction(cloud_pts, min_dist_treshold, k):
     ''' Received a cloud of point, and reduce the spatial density by removing
@@ -110,6 +130,7 @@ def fit_line(cloud_pts, ransac_residual_threshold, ransac_max_trial):
     model_robust, inliers = ransac(cloud_pts, LineModel, min_samples=2,
                              residual_threshold=ransac_residual_threshold,
                              max_trials=ransac_max_trial)
+    model_robust.estimate(cloud_pts[inliers])
 
 
     inliers_pts = cloud_pts[inliers,:]
@@ -332,7 +353,7 @@ def rotatePolygon(polygon,theta):
     return rotated_polygon
 
 
-def localize(corners, est_position, table_width, table_height):
+def localize_using_corners(corners, est_position, config):
     ''' Localize the robot by matching found corners with the one of the 
         rectangular table at there expected position. This need an estimation of
         the position to match correctly the corner.
@@ -344,10 +365,14 @@ def localize(corners, est_position, table_width, table_height):
                   in radian
     
     '''
-    pos = None
+    pos = (None, None)
     orientation = None
 
-    table_pos = np.array([[0,0],[table_width,0],[table_width,table_height],[0,table_height]], dtype=float)
+    table_pos = np.array([[0,0],
+                          [config['TABLE_WIDTH'],0],
+                          [config['TABLE_WIDTH'],config['TABLE_HEIGHT']],
+                          [0,config['TABLE_HEIGHT']]], 
+                         dtype=float)
     table_angle = np.array([0,math.pi/2,math.pi,3*math.pi/2],dtype=float)
 
     table_corner = table_pos - est_position[0:2]
@@ -375,43 +400,106 @@ def localize(corners, est_position, table_width, table_height):
     return pos, orientation
 
 
+def pair_points(ref_points, points):
+    paired_list = list()
 
-def localize_using_landmarks(corners, est_position, table_width, table_height):
+    for point in points:
+        dist = ref_points - point
+        dist = dist * dist
+        dist = np.sum(dist, axis=1)
+        paired_list.append(np.argmin(dist))
+
+    return paired_list
+
+
+def localize_using_landmarks(features, est_position, config):
     ''' Localize the robot by finding the transformation model (rotation + translation)
         that match the best the set of feature found to the known one on the table.
-        This need an estimation of
-        the position to match correctly the corner.
+        This need an estimation of the position.
 
     Parameters
     ----------
-    corners: list of (N) OrientedCorner object 
-    est_position: list of 3 float. 1. position x; 2. position y; 3. orientation
+    features: list of (N) OrientedCorner object 
+    est_position: list of 3 float. 1. position x; 2. position y; 3. heading
                   in radian
     
     '''
-    pos = None
-    orientation = None
+    position = (None, None)
+    heading = None
 
-    if corners is  None:
-        return None, None
+    if features is  None:
+        return (None, None), None
 
-    corners_list = np.array([(corner.x, corner.y) for corner in corners])
+    features_list = np.array([(feature.x, feature.y) for feature in features])
 
     table_landmarks = np.array([[0,0],
-                                [table_width,0],
-                                [table_width,table_height],
-                                [0,table_height]], 
-                                dtype=float)
+                                [config['TABLE_WIDTH'],0],
+                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']],
+                                [0,config['TABLE_HEIGHT']], 
+                                [0,config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']], 
+                                [0,config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']], 
+                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']], 
+                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']]], 
+                               dtype=float)
 
     table_rel_landmarks = table_landmarks - est_position[0:2]
-    table_rel_landmarks = rotatePolygon(table_rel_landmarks, -est_position[2])
+    table_rel_landmarks = rotatePolygon(table_rel_landmarks, -est_position[2]+np.pi/2)
 
-    pair_idx = pair_points(table_rel_landmarks, corners_list)
-    src = table_rel_landmarks[pair_idx]
-    dst = corners_list
+    pair_idx = pair_points(table_rel_landmarks, features_list)
+    src = table_landmarks[pair_idx]
+    dst = features_list
 
     model_robust, inliers = ransac((src, dst), TransformationModel, min_samples=2,
-                               residual_threshold=0.02, max_trials=50)
+                                   residual_threshold=0.05, max_trials=50)
     outliers = inliers == False
+    model_robust.estimate(src[inliers], dst[inliers])
 
-    return model_robust.translation+est_position[0:2], model_robust.rotation+est_position[0:2]
+    heading = np.array(-model_robust.rotation + np.pi/2)
+    position = np.array(-model_robust.translation)
+
+    return position, heading
+
+
+def are_pos_similar(position1, position2, options):
+    err_positions, err_heading = position_residuals(position1=position1.copy(), 
+                                                    position2=position2.copy())
+
+    if err_positions > options['MAX_ERR_POSITION']:
+        return False
+    elif err_heading > options['MAX_ERR_HEADING']:
+        return False
+
+    return True
+
+
+def distance_between_pos(position1, position2, options):
+    err_positions, err_heading = position_residuals(position1=position1.copy(), 
+                                                    position2=position2.copy())
+    return err_positions * options['POS_ERR_FACTOR'] + err_heading * options['HEADING_ERR_FACTOR']
+
+
+def filter_positions(last_pos, positions, options):
+    distance = list()
+    distance.append(distance_between_pos(last_pos, positions[0], options=options))
+    distance.append(distance_between_pos(last_pos, positions[1], options=options))
+
+    if are_pos_similar(positions[0], positions[1], options=options):
+        position = (positions[0][0]+positions[1][0]) / 2
+        heading = mean_angle([positions[0][1], positions[1][1]])
+        position = np.squeeze(position)
+        return position, heading
+    else:
+        idx_min = np.argmin(distance)
+        if distance[idx_min] < options['MAX_POS_DISTANCE']:
+            return positions[idx_min]
+        else:
+            return None, None
+
+
+def filter_one_position(last_pos, position, options):
+    distance = distance_between_pos(last_pos, position, options=options)
+
+    if distance < options['MAX_POS_DISTANCE']:
+        return position
+    else:
+        return None, None

@@ -3,9 +3,11 @@ import json
 from jsmin import jsmin
 import numpy as np
 import os
-
+import time
 import zmqmsgbus
 from convex_area_localization import *
+from models import PositionModel
+from skimage.measure import ransac
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -17,7 +19,6 @@ def parse_args():
     parser.add_argument('--logs', help='Logs and publish intermediate computations.', action="store_true")
 
     return parser.parse_args()
-
 
 def pol2cart(radius, theta):
     ''' Convert polar coordinate onto cartesian coordinate
@@ -35,6 +36,7 @@ def pol2cart(radius, theta):
 def update_scan_radius(topic, message):
     global radius
     radius = np.array(message)
+    positioning()
 
 
 def update_scan_theta(topic, message):
@@ -44,12 +46,166 @@ def update_scan_theta(topic, message):
 
 def update_scan_pos(topic, message):
     global datagram_pos
-    datagram_pos = message
+    datagram_pos = get_lidar_position_from_robot(message)
 
+
+def get_position_using_corners(segments, config, datagram_pos, node, args):
+    corners = None
+    # only keep external segments
+    ext_segments = keep_external_segment(segments=segments, 
+                                         segment_residual_threshold=config['SEGMENT_RESIDUAL_THRESHOLD'],
+                                         segment_total_residual_threshold=config['SEGMENT_TOTAL_RESIDUAL_THRESHOLD'])
+
+    # extract valide intersections
+    corners = extract_corner(ext_segments=ext_segments, 
+                             intersection_threshold=config['INTERSECTION_THRESHOLD'])
+
+    # localize the robot using the intersections found
+    positions, headings = localize_using_corners(corners=corners, 
+                                                 est_position=datagram_pos, 
+                                                 config=config)
+
+    if headings is None:
+        position = (None, None)
+        heading = None
+    elif len(headings) > 1:
+        positions = np.vstack(positions)
+        headings = np.vstack(headings)        
+
+        model_robust, inliers = ransac(data=(positions, headings),
+                                       model_class=PositionModel,
+                                       min_samples=1,
+                                       residual_threshold=1, 
+                                       max_trials=10)
+        outliers = inliers == False
+
+        model_robust.estimate(positions[inliers], headings[inliers])
+
+        position = model_robust.position
+        heading = model_robust.heading
+    else:
+        position = positions[0].squeeze()
+        heading = headings[0]
+
+    if args.print_output:
+        os.system('clear')
+        print(str(position)+" "+str(heading))
+
+    # Publish data for viewer 
+    if args.logs:
+        segments_publisher = list()
+        for idx, segment in enumerate(ext_segments):
+            segments_publisher.append(((segment.pt_A[0], segment.pt_B[0]), (segment.pt_A[1],segment.pt_B[1])))
+        node.publish('/lidar_viewer/ext_segments', segments_publisher)
+
+        if corners is not None:
+            node.publish('/lidar_viewer/corners', [(corner.x, corner.y) for corner in corners])
+        else:
+            node.publish('/lidar_viewer/corners', [])
+
+    return position, heading
+
+
+def get_position_using_features(segments, config, datagram_pos, node, args):
+
+    # extract valide intersections as feature
+    features = extract_corner(ext_segments=segments, 
+                              intersection_threshold=config['INTERSECTION_THRESHOLD'])
+
+    # localize the robot using the intersections found
+    position, orientation = localize_using_landmarks(features=features, 
+                                                     est_position=datagram_pos, 
+                                                     config=config)
+
+    # Publish data for viewer 
+    if args.logs:
+        if features is not None:
+            node.publish('/lidar_viewer/features', [(feature.x, feature.y) for feature in features])
+        else:
+            node.publish('/lidar_viewer/features', [])
+
+    return position, orientation
+
+
+def positioning():
+    global config
+    global args
+    global radius, theta
+    global datagram_pos, node
+
+    position = (None, None)
+    heading = None
+
+    # remove points that are too close
+    radius_filtered, theta_filtered = remove_close_pts(radius, theta, config['CLOSEST_POINT'])
+
+    # convert polar coordinate in cartesian
+    cloud_pts = pol2cart(radius_filtered, theta_filtered)
+
+    # reduce cloud point density
+    red_cloud_pts = density_reduction(cloud_pts, config['MAX_DIST_POINT'], 1)
+
+    # find lines
+    lines_model = find_lines(cloud_pts=red_cloud_pts, 
+                             nb_lines=config['NB_LINE'], 
+                             ransac_residual_threshold=config['RANSAC_RESIDUAL_THRESHOLD'], 
+                             ransac_max_trial=config['RANSAC_MAX_TRIAL'])
+
+    # convert lines onto segments
+    segments = segment_line(lines_model)
+
+    # localize the robot using the table corners 
+    position_crn, heading_crn = get_position_using_corners(segments=segments, 
+                                                           config=config, 
+                                                           datagram_pos=datagram_pos,
+                                                           node=node,
+                                                           args=args)
+
+    # localize the robot using the known features on the table 
+    position_ftr, heading_ftr = get_position_using_features(segments=segments, 
+                                                            config=config, 
+                                                            datagram_pos=datagram_pos,
+                                                            node=node,
+                                                            args=args)
+    
+    if position_crn is not None  and heading_crn is not None:
+        node.publish('/lidar_debug/position_crn', position_crn.tolist())
+        node.publish('/lidar_debug/heading_crn', heading_crn.tolist())
+    if position_ftr is not None  and heading_ftr is not None:
+        node.publish('/lidar_debug/position_ftr', position_ftr.tolist())
+        node.publish('/lidar_debug/heading_ftr', heading_ftr.tolist())
+
+    if all([all(position_crn), heading_crn, all(position_ftr), heading_ftr]):
+        position, heading = filter_positions(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
+                                             positions=[[position_crn, heading_crn], [position_ftr, heading_ftr]],
+                                             options=config)
+    elif all([all(position_crn), heading_crn]):
+        position, heading = filter_one_position(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
+                                                position=[position_crn, heading_crn],
+                                                options=config)
+    elif all([all(position_ftr), heading_ftr]):
+        position, heading = filter_one_position(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
+                                                position=[position_ftr, heading_ftr],
+                                                options=config)
+
+    if position is not None and heading is not None:
+        node.publish('/lidar_testing/position', get_robot_position_from_lidar(position.tolist() + [heading.tolist()]))
+
+
+    # Publish data for viewer 
+    if args.logs:
+        node.publish('/lidar_viewer/cloud_pts', cloud_pts.tolist())
+        node.publish('/lidar_viewer/red_cloud_pts', red_cloud_pts.tolist())
+        
+        segments_publisher = list()
+        for idx, segment in enumerate(segments):
+            segments_publisher.append(((segment.pt_A[0], segment.pt_B[0]), (segment.pt_A[1],segment.pt_B[1])))
+        node.publish('/lidar_viewer/segments', segments_publisher)
 
 def main():
+    global config, args
     global radius, theta
-    global datagram_pos
+    global datagram_pos, node
 
     args = parse_args()
     config = json.loads(jsmin(args.config.read()))
@@ -59,74 +215,21 @@ def main():
                         pub_addr='ipc://ipc/sink')
     node = zmqmsgbus.Node(bus)
 
-    radius = np.array(node.recv('/lidar/radius'))
-    node.register_message_handler('/lidar/radius', update_scan_radius)
     theta = np.array(node.recv('/lidar/theta'))
     node.register_message_handler('/lidar/theta', update_scan_theta)
 
     datagram_pos = node.recv('/position')
     node.register_message_handler('/position', update_scan_pos)
 
+    radius = np.array(node.recv('/lidar/radius'))
+    node.register_message_handler('/lidar/radius', update_scan_radius)
+
     datagram_pos = np.asarray([0.5,0.5,1.57])
 
     print('receiving')
-    while 1:
-        cloud_pts = pol2cart(radius, theta)
+    while True:
+        time.sleep(1)
 
-        # reduce cloud point density
-        red_cloud_pts = density_reduction(cloud_pts, config['MAX_DIST_POINT'], 1)
 
-        # find lines
-        lines_model = find_lines(cloud_pts=red_cloud_pts, 
-                                 nb_lines=config['NB_LINE'], 
-                                 ransac_residual_threshold=config['RANSAC_RESIDUAL_THRESHOLD'], 
-                                 ransac_max_trial=config['RANSAC_MAX_TRIAL'])
-
-        # convert lines onto segments
-        segments = segment_line(lines_model)
-
-        ext_segments = segments
-        # only keep external segments
-        # ext_segments = keep_external_segment(segments=segments, 
-        #                                      segment_residual_threshold=config['SEGMENT_RESIDUAL_THRESHOLD'],
-        #                                      segment_total_residual_threshold=config['SEGMENT_TOTAL_RESIDUAL_THRESHOLD'])
-
-        # extract valide intersections
-        corners = extract_corner(ext_segments=ext_segments, 
-                                 intersection_threshold=config['INTERSECTION_THRESHOLD'])
-
-        # localize the robot using the intersections found
-        positions, orientations = localize(corners=corners, 
-                                           est_position=datagram_pos, 
-                                           table_width=config['TABLE_WIDTH'], 
-                                           table_height=config['TABLE_HEIGHT'])
-
-        position = np.array([0,0])
-        orientation = np.array([0])
-
-        if positions is not None and orientations is not None:
-            position = np.mean(positions, axis=0).squeeze()
-            orientation = np.mean(orientations)
-
-            if args.print_output:
-                os.system('clear')
-                print(str(position)+" "+str(orientation))
-
-            node.publish('/lidar/position', position.tolist() + [orientation])
-
-        # Publish data for viewer 
-        if args.logs:
-            node.publish('/lidar_viewer/cloud_pts', cloud_pts.tolist())
-            node.publish('/lidar_viewer/red_cloud_pts', red_cloud_pts.tolist())
-            
-            segments_publisher = list()
-            for idx, segment in enumerate(ext_segments):
-                segments_publisher.append(((segment.pt_A[0], segment.pt_B[0]), (segment.pt_A[1],segment.pt_B[1])))
-            node.publish('/lidar_viewer/segments', segments_publisher)
-
-            if corners is not None:
-                node.publish('/lidar_viewer/corners', [(corner.x, corner.y) for corner in corners])
-            else:
-                node.publish('/lidar_viewer/corners', [])
 if __name__ == '__main__':
     main()

@@ -1,11 +1,21 @@
 {
+    "CLOSEST_POINT":0.2,                // Don't keep points that are closer than that. in m
     "MAX_DIST_POINT":0.005,             // Maximum distance between in cm
-    "NB_LINE":6,                        // number of line to search in points cloud
-    "TABLE_WIDTH":1,
-    "TABLE_HEIGHT":2,
+    "NB_LINE":8,                        // number of line to search in points cloud
+
+    "TABLE_WIDTH":2,
+    "TABLE_HEIGHT":3,
+    "CENTER_OBSTACLE_HALF_WIDTH":0.024,
+
     "RANSAC_RESIDUAL_THRESHOLD":0.01,        // in m
-    "RANSAC_MAX_TRIAL":300,
-    "SEGMENT_RESIDUAL_THRESHOLD":0.02,       // in m
-    "SEGMENT_TOTAL_RESIDUAL_THRESHOLD":0.04, // in m
-    "INTERSECTION_THRESHOLD":0.05            // in rad
+    "RANSAC_MAX_TRIAL":50,
+    "SEGMENT_RESIDUAL_THRESHOLD":0.1,        // in m
+    "SEGMENT_TOTAL_RESIDUAL_THRESHOLD":0.08, // in m
+    "INTERSECTION_THRESHOLD":0.1,           // in rad
+
+    "MAX_ERR_POSITION":0.071,   // in m
+    "MAX_ERR_HEADING":0.20,     // in rad
+    "POS_ERR_FACTOR":3.0,
+    "HEADING_ERR_FACTOR":1.0,
+    "MAX_POS_DISTANCE":0.81    
 }
