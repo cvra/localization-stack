@@ -33,10 +33,10 @@ def pol2cart(radius, theta):
     return cartesian;
 
 
-def update_scan_radius(topic, message):
+def update_scan_radius(topic, message, args, config, node):
     global radius
     radius = np.array(message)
-    positioning()
+    positioning(args, config, node)
 
 
 def update_scan_theta(topic, message):
@@ -107,7 +107,6 @@ def get_position_using_corners(segments, config, datagram_pos, node, args):
 
 
 def get_position_using_features(segments, config, datagram_pos, node, args):
-
     # extract valide intersections as feature
     features = extract_corner(ext_segments=segments, 
                               intersection_threshold=config['INTERSECTION_THRESHOLD'])
@@ -127,23 +126,21 @@ def get_position_using_features(segments, config, datagram_pos, node, args):
     return position, orientation
 
 
-def positioning():
-    global config
-    global args
+def positioning(args, config, node):
     global radius, theta
-    global datagram_pos, node
+    global datagram_pos
 
     position = (None, None)
     heading = None
 
     # remove points that are too close
-    radius_filtered, theta_filtered = remove_close_pts(radius, theta, config['CLOSEST_POINT'])
+    radius_filtered, theta_filtered = remove_off_range_pts(radius, theta, config['CLOSEST_POINT'], config['FAREST_POINT'])
 
     # convert polar coordinate in cartesian
     cloud_pts = pol2cart(radius_filtered, theta_filtered)
 
     # reduce cloud point density
-    red_cloud_pts = density_reduction(cloud_pts, config['MAX_DIST_POINT'], 1)
+    red_cloud_pts = density_reduction(cloud_pts, config['MAX_DIST_BETWEEN_POINT'], 1)
 
     # find lines
     lines_model = find_lines(cloud_pts=red_cloud_pts, 
@@ -169,11 +166,9 @@ def positioning():
                                                             args=args)
     
     if position_crn is not None  and heading_crn is not None:
-        node.publish('/lidar_debug/position_crn', position_crn.tolist())
-        node.publish('/lidar_debug/heading_crn', heading_crn.tolist())
+        node.publish('/lidar_debug/position_crn', get_robot_position_from_lidar(position_crn.tolist() + [heading_crn.tolist()]))
     if position_ftr is not None  and heading_ftr is not None:
-        node.publish('/lidar_debug/position_ftr', position_ftr.tolist())
-        node.publish('/lidar_debug/heading_ftr', heading_ftr.tolist())
+        node.publish('/lidar_debug/position_ftr', get_robot_position_from_lidar(position_ftr.tolist() + [heading_ftr.tolist()]))
 
     if all([all(position_crn), heading_crn, all(position_ftr), heading_ftr]):
         position, heading = filter_positions(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
@@ -203,9 +198,8 @@ def positioning():
         node.publish('/lidar_viewer/segments', segments_publisher)
 
 def main():
-    global config, args
     global radius, theta
-    global datagram_pos, node
+    global datagram_pos
 
     args = parse_args()
     config = json.loads(jsmin(args.config.read()))
@@ -222,7 +216,7 @@ def main():
     node.register_message_handler('/position', update_scan_pos)
 
     radius = np.array(node.recv('/lidar/radius'))
-    node.register_message_handler('/lidar/radius', update_scan_radius)
+    node.register_message_handler('/lidar/radius', lambda params: update_scan_radius(config, args, node))
 
     datagram_pos = np.asarray([0.5,0.5,1.57])
 
