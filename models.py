@@ -4,10 +4,22 @@ from cmath import rect, phase
 
 
 def mean_angle(rad_list):
-    return phase(sum(rect(1, rad) for rad in rad_list)/len(rad_list))
+    return np.array(phase(sum(rect(1, rad) for rad in rad_list)/len(rad_list)))
+
 
 def diff_angle(rad_list, rad_ref):
     return np.array([math.atan2(math.sin(rad-rad_ref), math.cos(rad_ref-rad)) for rad in rad_list])
+
+
+def position_residuals(position1, position2):
+    if len(position1[0].shape) < 2:
+        position1[0] = np.expand_dims(position1[0], axis=0)
+        position1[1] = np.expand_dims(position1[1], axis=0)
+
+    err_position = np.sqrt((np.sum((position1[0] - position2[0])**2, axis = 1)))
+    err_heading = np.abs(diff_angle(position1[1], position2[1]))
+
+    return err_position, err_heading
 
 
 class PositionModel(object):
@@ -44,8 +56,8 @@ class PositionModel(object):
         self.params = np.hstack([position, heading])
 
     def residuals(self, positions, headings):
-        err_positions = np.sqrt((np.sum((positions - self.position)**2, axis = 1)))
-        err_heading = np.abs(diff_angle(headings, self.heading))
+        err_positions, err_heading = position_residuals(position1=(positions, headings), 
+                                                        position2=(self.position, self.heading))
 
         return err_positions * self.pos_err_factor + err_heading * self.heading_err_factor
 
