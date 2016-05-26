@@ -1,5 +1,61 @@
 import numpy as np
 import math
+from cmath import rect, phase
+
+
+def mean_angle(rad_list):
+    return phase(sum(rect(1, rad) for rad in rad_list)/len(rad_list))
+
+def diff_angle(rad_list, rad_ref):
+    return np.array([math.atan2(math.sin(rad-rad_ref), math.cos(rad_ref-rad)) for rad in rad_list])
+
+
+class PositionModel(object):
+    """ PositionModel
+
+        Modelise the position of the robot using its XY position
+        and heading angle.
+    """
+
+    def __init__(self, heading=None, translation=None, pos_err_factor=5.5, heading_err_factor=1.0):
+        self.pos_err_factor = pos_err_factor
+        self.heading_err_factor = heading_err_factor
+
+        params = any(param is not None for param in (heading, translation))
+
+        if params:
+            if heading is None:
+                heading = 0
+            if translation is None:
+                translation = (0, 0)
+        else:
+            heading = 0
+            translation = (0, 0)
+
+        self.params = np.hstack([translation, heading])
+
+    def estimate(self, positions, headings):
+        if len(positions.shape) < 2:
+            positions = positions.reshape(1,2)
+
+        position = np.sum(positions, axis=0) / positions.shape[0]
+        heading = mean_angle(headings)
+
+        self.params = np.hstack([position, heading])
+
+    def residuals(self, positions, headings):
+        err_positions = np.sqrt((np.sum((positions - self.position)**2, axis = 1)))
+        err_heading = np.abs(diff_angle(headings, self.heading))
+
+        return err_positions * self.pos_err_factor + err_heading * self.heading_err_factor
+
+    @property
+    def heading(self):
+        return self.params[2]
+
+    @property
+    def position(self):
+        return self.params[0:2]
 
 
 class TransformationModel(object):
@@ -47,7 +103,6 @@ class TransformationModel(object):
         else:
             # default to an identity transform
             self.params = np.eye(3)
-
 
     def estimate(self, p, q):
         p_mean = np.sum(p,axis=0) / len(p)
