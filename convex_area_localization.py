@@ -454,12 +454,15 @@ def localize_using_landmarks(features, est_position, config):
     dst = features_list
 
     model_robust, inliers = ransac((src, dst), TransformationModel, min_samples=2,
-                                   residual_threshold=config['MAX_RESIDUAL_LANDMARKS'], max_trials=100)
+                                   residual_threshold=config['MAX_RESIDUAL_LANDMARKS'], max_trials=100,
+                                   is_data_valid=lambda cls, data: TransformationModel.is_data_valid(cls, data, config['MIN_DISTANCE_VALID_LANDMARKS']))
     outliers = inliers == False
-    model_robust.estimate(src[inliers], dst[inliers])
 
-    heading = np.array(model_robust.rotation + est_position[2])
-    position = np.array(est_position[0:2]).T + rotatePolygon(model_robust.translation, est_position[2]-np.pi/2).squeeze()
+    if model_robust is not None and any(inliers):
+        model_robust.estimate(src[inliers], dst[inliers])
+
+        heading = np.array(model_robust.rotation + est_position[2])
+        position = np.array(est_position[0:2]).T + rotatePolygon(model_robust.translation, est_position[2]+np.pi/2).squeeze()
 
     return position, heading
 
