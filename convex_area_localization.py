@@ -435,12 +435,15 @@ def localize_using_landmarks(features, est_position, config):
     table_landmarks = np.array([[0,0],
                                 [config['TABLE_WIDTH'],0],
                                 [config['TABLE_WIDTH'],config['TABLE_HEIGHT']],
-                                [0,config['TABLE_HEIGHT']], 
-                                [0,config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']], 
-                                # [0,config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']], 
-                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']]], 
-                                # [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']]], 
+                                [0,config['TABLE_HEIGHT']]],
                                dtype=float)
+
+    if est_position[1] < config['TABLE_WIDTH'] / 2:
+        table_landmarks = np.vstack((table_landmarks, np.array([[0,config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']], 
+                                                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']]])))
+    else:
+        table_landmarks = np.vstack((table_landmarks, np.array([[0,config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']], 
+                                                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']]])))
 
 
     table_rel_landmarks = table_landmarks - est_position[0:2]
