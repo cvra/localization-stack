@@ -41,8 +41,8 @@ def get_lidar_position_from_robot(robot):
     return [lidar_position[0], lidar_position[1], robot_heading]
 
 
-def remove_close_pts(radius, theta, min_distance):
-    to_keep = radius >= min_distance
+def remove_off_range_pts(radius, theta, min_distance, max_distance):
+    to_keep = np.array([r >= min_distance and r <= max_distance for r in radius])
     return radius[to_keep], theta[to_keep]
 
 
