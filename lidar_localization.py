@@ -108,14 +108,18 @@ def get_position_using_corners(segments, config, datagram_pos, node, args):
 
 
 def get_position_using_features(segments, config, datagram_pos, node, args):
+    position = (None, None)
+    heading = None
+
     # extract valide intersections as feature
     features = extract_corner(ext_segments=segments, 
                               intersection_threshold=config['INTERSECTION_THRESHOLD'])
 
-    # localize the robot using the intersections found
-    position, orientation = localize_using_landmarks(features=features, 
-                                                     est_position=datagram_pos, 
-                                                     config=config)
+    if features is not None and len(features) > 1:
+        # localize the robot using the intersections found
+        position, heading = localize_using_landmarks(features=features, 
+                                                         est_position=datagram_pos, 
+                                                         config=config)
 
     # Publish data for viewer 
     if args.logs:
@@ -124,7 +128,7 @@ def get_position_using_features(segments, config, datagram_pos, node, args):
         else:
             node.publish('/lidar_viewer/features', [])
 
-    return position, orientation
+    return position, heading
 
 
 def positioning(args, config, node):
@@ -188,7 +192,7 @@ def positioning(args, config, node):
                                                 options=config)
 
     if position is not None and heading is not None:
-        node.publish('/lidar/position', get_robot_position_from_lidar(position.tolist() + [heading.tolist()]))
+        node.publish('/lidar_debug/position', get_robot_position_from_lidar(position.tolist() + [heading.tolist()]))
 
 
     # Publish data for viewer 
@@ -222,8 +226,6 @@ def main():
     radius = np.array(node.recv('/lidar/radius'))
 
     node.register_message_handler('/lidar/radius', lambda topic, message: update_scan_radius(topic, message, args, config, node))
-
-    datagram_pos = np.asarray([0.5,0.5,1.57])
 
     print('receiving')
     while True:
