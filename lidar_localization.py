@@ -188,7 +188,7 @@ def positioning(args, config, node):
                                                 options=config)
 
     if position is not None and heading is not None:
-        node.publish('/lidar_testing/position', get_robot_position_from_lidar(position.tolist() + [heading.tolist()]))
+        node.publish('/lidar/position', get_robot_position_from_lidar(position.tolist() + [heading.tolist()]))
 
 
     # Publish data for viewer 
