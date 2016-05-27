@@ -461,7 +461,7 @@ def localize_using_landmarks(features, est_position, config):
     if model_robust is not None and any(inliers):
         model_robust.estimate(src[inliers], dst[inliers])
 
-        heading = np.array(model_robust.rotation + est_position[2])
+        heading = np.array(-model_robust.rotation + est_position[2])
         position = np.array(est_position[0:2]).T + rotatePolygon(model_robust.translation, est_position[2]+np.pi/2).squeeze()
 
     return position, heading
