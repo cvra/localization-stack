@@ -117,6 +117,10 @@ class TransformationModel(object):
             self.params = np.eye(3)
 
     def estimate(self, p, q):
+
+        if len(p) < 2 or len(q) < 2:
+            return False
+
         p_mean = np.sum(p,axis=0) / len(p)
         q_mean = np.sum(q,axis=0) / len(q)
 
@@ -138,6 +142,13 @@ class TransformationModel(object):
 
     def residuals(self, src, dst):
         return np.sqrt(np.sum((self(src) - dst)**2, axis=1))
+
+    def is_data_valid(cls, data, min_distance):
+        distance = np.sqrt(np.sum((data[0]-data[1])**2))
+        if distance > min_distance:
+            return True
+        else:
+            return False
 
     @property
     def rotation(self):
