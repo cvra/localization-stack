@@ -35,6 +35,7 @@ def pol2cart(radius, theta):
 
 def update_scan_radius(topic, message, args, config, node):
     global radius
+
     radius = np.array(message)
     positioning(args, config, node)
 
@@ -134,7 +135,10 @@ def positioning(args, config, node):
     heading = None
 
     # remove points that are too close
-    radius_filtered, theta_filtered = remove_off_range_pts(radius, theta, config['CLOSEST_POINT'], config['FAREST_POINT'])
+    radius_filtered, theta_filtered = remove_off_range_pts(radius=radius, 
+                                                           theta=theta, 
+                                                           min_distance=config['CLOSEST_POINT'], 
+                                                           max_distance=config['FAREST_POINT'])
 
     # convert polar coordinate in cartesian
     cloud_pts = pol2cart(radius_filtered, theta_filtered)
@@ -216,7 +220,8 @@ def main():
     node.register_message_handler('/position', update_scan_pos)
 
     radius = np.array(node.recv('/lidar/radius'))
-    node.register_message_handler('/lidar/radius', lambda params: update_scan_radius(config, args, node))
+
+    node.register_message_handler('/lidar/radius', lambda topic, message: update_scan_radius(topic, message, args, config, node))
 
     datagram_pos = np.asarray([0.5,0.5,1.57])
 
