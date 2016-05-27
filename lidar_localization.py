@@ -166,34 +166,34 @@ def positioning(args, config, node):
                                                            node=node,
                                                            args=args)
 
-    # localize the robot using the known features on the table 
-    position_ftr, heading_ftr = get_position_using_features(segments=segments, 
-                                                            config=config, 
-                                                            datagram_pos=datagram_pos,
-                                                            node=node,
-                                                            args=args)
+    # # localize the robot using the known features on the table 
+    # position_ftr, heading_ftr = get_position_using_features(segments=segments, 
+    #                                                         config=config, 
+    #                                                         datagram_pos=datagram_pos,
+    #                                                         node=node,
+    #                                                         args=args)
     
     if position_crn is not None  and heading_crn is not None:
         node.publish('/lidar_debug/position_crn', get_robot_position_from_lidar(position_crn.tolist() + [heading_crn.tolist()]))
-    if position_ftr is not None  and heading_ftr is not None:
-        node.publish('/lidar_debug/position_ftr', get_robot_position_from_lidar(position_ftr.tolist() + [heading_ftr.tolist()]))
+    # if position_ftr is not None  and heading_ftr is not None:
+    #     node.publish('/lidar_debug/position_ftr', get_robot_position_from_lidar(position_ftr.tolist() + [heading_ftr.tolist()]))
 
-    if all([all(position_crn), heading_crn, all(position_ftr), heading_ftr]):
-        position, heading = filter_positions(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
-                                             positions=[[position_crn, heading_crn], [position_ftr, heading_ftr]],
-                                             options=config)
-    elif all([all(position_crn), heading_crn]):
+    # if all([all(position_crn), heading_crn, all(position_ftr), heading_ftr]):
+    #     position, heading = filter_positions(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
+    #                                          positions=[[position_crn, heading_crn], [position_ftr, heading_ftr]],
+    #                                          options=config)
+    # elif all([all(position_crn), heading_crn]):
+    if all([all(position_crn), heading_crn]):
         position, heading = filter_one_position(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
                                                 position=[position_crn, heading_crn],
                                                 options=config)
-    elif all([all(position_ftr), heading_ftr]):
-        position, heading = filter_one_position(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
-                                                position=[position_ftr, heading_ftr],
-                                                options=config)
+    # elif all([all(position_ftr), heading_ftr]):
+    #     position, heading = filter_one_position(last_pos=[np.array(datagram_pos[:2]), np.array(datagram_pos[2])],
+    #                                             position=[position_ftr, heading_ftr],
+    #                                             options=config)
 
     if position is not None and heading is not None:
         node.publish('/lidar_debug/position', get_robot_position_from_lidar(position.tolist() + [heading.tolist()]))
-
 
     # Publish data for viewer 
     if args.logs:
