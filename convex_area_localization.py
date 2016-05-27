@@ -437,25 +437,26 @@ def localize_using_landmarks(features, est_position, config):
                                 [config['TABLE_WIDTH'],config['TABLE_HEIGHT']],
                                 [0,config['TABLE_HEIGHT']], 
                                 [0,config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']], 
-                                [0,config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']], 
-                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']], 
-                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']]], 
+                                # [0,config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']], 
+                                [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 - config['CENTER_OBSTACLE_HALF_WIDTH']]], 
+                                # [config['TABLE_WIDTH'],config['TABLE_HEIGHT']/2 + config['CENTER_OBSTACLE_HALF_WIDTH']]], 
                                dtype=float)
+
 
     table_rel_landmarks = table_landmarks - est_position[0:2]
     table_rel_landmarks = rotatePolygon(table_rel_landmarks, -est_position[2]+np.pi/2)
 
     pair_idx = pair_points(table_rel_landmarks, features_list)
-    src = table_landmarks[pair_idx]
+    src = table_rel_landmarks[pair_idx]
     dst = features_list
 
     model_robust, inliers = ransac((src, dst), TransformationModel, min_samples=2,
-                                   residual_threshold=0.05, max_trials=50)
+                                   residual_threshold=config['MAX_RESIDUAL_LANDMARKS'], max_trials=100)
     outliers = inliers == False
     model_robust.estimate(src[inliers], dst[inliers])
 
-    heading = np.array(-model_robust.rotation + np.pi/2)
-    position = np.array(-model_robust.translation)
+    heading = np.array(model_robust.rotation + est_position[2])
+    position = np.array(est_position[0:2]).T + rotatePolygon(model_robust.translation, est_position[2]-np.pi/2).squeeze()
 
     return position, heading
 
